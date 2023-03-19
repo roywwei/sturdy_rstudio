@@ -1,0 +1,76 @@
+---
+title: "Untitled"
+author: "roywei"
+Date: " `r Sys.Date()` "
+
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# 调用要使用的R包
+```{r load R package,message= F}
+require(pedquant)
+require(tidytable)
+require(purrr)
+require(ggplot2)
+```
+
+#获取数据整理数据
+```{r get index data,echo=F}
+etf<- c('510050.SS','510300.SS','159919.SZ','000300.SS','000852.SS','510500.SS','159915.SZ','159922.SZ','159901.SZ','000016.SS')
+pedquant::md_stock(etf,date_range = '3y') %>% 
+    purrr::map(~select.(.,date,close)) %>% 
+    purrr::map(~quantmod::dailyReturn(.,type = 'log')) %>% 
+  reduce(merge) %>% 
+  `colnames<-`(etf) ->ret1
+ret1 %>% head() %>% 
+  pander::pander(split.table=Inf)
+```
+数据整理宽数据变长数据，并绘制图
+## 数据描述统计
+```{r}
+ret1 %>% 
+  psych::describe()
+ret1 %>% 
+  summarytools::descr()
+ret1 %>% 
+  summarytools::dfSummary()
+ret1 %>% 
+  skimr::skim()
+ret1 %>% 
+  pastecs::stat.desc(norm = T)
+```
+
+
+## 数据变化及展示
+### 宽变长
+```{r}
+ret1 %>%timetk::tk_tbl(rename_index = 'Date') %>% 
+    tidytable::pivot_longer(cols = -Date,names_to = 'stock',values_to = 'return')->ret_long
+ggplot2::ggplot(ret_long,mapping = aes(x=Date,y=return,color=stock))+geom_path(stat = "identity") +
+    facet_grid(stock ~ .) + theme_minimal() + labs(x = "Date", y = "returns")
+```
+
+## GitHub Documents
+
+This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
+
+## Including Code
+
+You can include R code in the document as follows:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
