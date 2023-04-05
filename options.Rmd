@@ -6,7 +6,7 @@ Date: " `r Sys.Date()` "
 output: github_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, tidy='styler',include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 # 调用要使用的R包
@@ -74,3 +74,89 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+数据清理，生成变量以便于机器学习使用
+```{r ml,tidy='styler'}
+require(tidytable)
+require(tidyquant)
+require(pedquant)
+test <- md_stock('510500.ss',date_range = '10y') %>% bind_rows()
+
+test %>%
+tq_mutate(select = close_adj,
+mutate_fun =  SMA,
+n=5,
+col_rename = 'sma5') %>%
+tq_mutate(select = close_adj,
+mutate_fun =  EMA,
+n=5,
+col_rename = 'ema5') %>%
+tq_mutate(select = close_adj,
+mutate_fun =  RSI,
+n=5,
+col_rename = "rsi") %>%
+tq_mutate(select = close_adj,
+mutate_fun =  dailyReturn,
+type = 'log',
+col_rename = 'ret1') ->test1
+test %>%
+tq_mutate(select = close_adj,
+mutate_fun =  SMA,
+n=5,
+col_rename = 'sma5') %>%
+tq_mutate(select = close_adj,
+mutate_fun =  EMA,
+n=5,
+col_rename = 'ema5') %>%
+tq_mutate(select = close_adj,
+mutate_fun =  RSI,
+n=5,
+col_rename = 'rsi') %>%
+tq_mutate(select = close_adj,
+mutate_fun =  dailyReturn,
+type = 'log',
+col_rename = 'ret1') ->test1
+
+test1 %>%
+tq_mutate(select = close_adj,
+mutate_fun = MACD,
+) %>%
+mutate(Direction = ifelse(close_adj >= lag(close_adj, 5), 1, 0)) %>%
+select(9:ncol(.)) %>%
+mutate(sma5=lag(sma5),ema5=lag(ema5),rsi=lag(rsi),ret1=lag(ret1),sigal=lag(signal),macd=lag(macd)) %>% select(Direction,ret1,sma5,ema5,macd,signal,rsi) %>%
+drop_na() %>%
+`colnames<-`(c("Direction", "Ret", "SMA", "EMA", "MACD", "Signal",
+"RSI"))->d_ex1
+
+#使用逻辑斯蒂回归进行分类预测 
+# remove NAs
+d_ex1 = na.omit(d_ex1)
+# convert to data frame
+d_ex1 = as.data.frame(d_ex1)
+# convert direction to a factor for classification
+
+d_ex1$Direction = as.factor(d_ex1$Direction)
+
+idx1 = c(1:round(nrow(d_ex1) * 0.7))  #create index for first 70% values to be in the testing set
+d_train1 = d_ex1[idx1, ]  #training set
+d_test1 = d_ex1[-idx1, ]  #testing set
+library(caret)
+set.seed(999)
+# control
+cntrl1 = trainControl(method = "timeslice", initialWindow = 250, horizon = 30,
+    fixedWindow = TRUE)
+# preprocesing
+prep1 = c("center", "scale")
+# logistic regression
+logit_ex1 = train(Direction ~ ., data = d_train1, method = "glm", family = "binomial",
+    trControl = cntrl1, preProcess = prep1)
+logit_ex1  #final model accuracy
+summary(logit_ex1$finalModel)  #summary of the final model
+# 预测变量重要图示
+library(vip)
+vip(logit_ex1, geom = "point") + theme_minimal()
+# 使用混淆矩阵分析预测精度
+pred1 = predict(logit_ex1, newdata = d_test1)  #prediction on the test data
+confusionMatrix(data = pred1, reference = d_test1$Direction)
+```
+
