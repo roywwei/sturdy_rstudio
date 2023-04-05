@@ -74,3 +74,13 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+require(reticulate)
+conda_python(envname = 'akshare')
+use_python('D:/anaconda3/envs/akshare/python.exe')
+ak <- import('akshare')
+ak$option_risk_analysis_em() %>% 
+  as_tidytable() %>% 
+  mutate(到期日=purrr::map_vec(.$到期日,as.character.Date))
+```
+
